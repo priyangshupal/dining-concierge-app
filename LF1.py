@@ -106,27 +106,28 @@ def dispatch(intent_request):
 
 
 def validate_dining_suggestion(location, cuisine, num_people, date, time):
-    
-    locs = ["manhattan", "brooklyn", "bronx", "queens", "staten island"]
+# Check if location is Valid.
+    locs = ["manhattan"]
     if location is not None and location.lower() not in locs:
         return build_validation_result(False,
                                       'Location',
                                       'Location not supported. Please try one of the five boroughs')
 
-    
-    cuisines = ['italian', 'chinese', 'indian', 'american', 'mexican', 'spanish', 'greek', 'latin', 'Persian']
+# Checking if Valid Cuisine
+    cuisines = ['italian', 'chinese', 'indian']
     if cuisine is not None and cuisine.lower() not in cuisines:
         return build_validation_result(False,
                                       'Cuisine',
                                       'Cuisine not available. Please try another cuisine')
 
+# Check if the count of people is Under 20. Capping Table size at 20
     if num_people is not None:
         num_people = int(num_people)
         if num_people > 20 or num_people < 0:
             return build_validation_result(False,
                                            'NumberOfPeople',
                                            'Maximum 20 people allowed. Try again')
-
+# Check if the date is valid
     if date is not None:
         if not isvalid_date(date):
             return build_validation_result(False, 'Date',
@@ -134,18 +135,14 @@ def validate_dining_suggestion(location, cuisine, num_people, date, time):
         elif datetime.datetime.strptime(date, '%Y-%m-%d').date() < datetime.date.today():
             return build_validation_result(False, 'Date', 'Sorry Invalid Date, please enter a valid date')
 
+# Check if the time is valid 
     if time is not None:
-        # if datetime.datetime.strptime(date,"%H:%M:%S").time() < currentDateAndTime.strftime("%H:%M:%S"):
-        #     return build_validation_result(False, 'Time', 'Sorry Invalid Time, Please Enter a valid Time')
-        if len(time) != 5:
-            # Not a valid time; use a prompt defined on the build-time model.
-            return build_validation_result(False, 'Time', None)
-
+        
         hour, minute = time.split(':')
         hour = parse_int(hour)
         minute = parse_int(minute)
         if math.isnan(hour) or math.isnan(minute):
-            # Not a valid time; use a prompt defined on the build-time model.
+        
             return build_validation_result(False, 'Time', 'Not a valid time')
 
         if hour < 10 or hour > 20:
