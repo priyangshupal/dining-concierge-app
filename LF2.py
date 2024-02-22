@@ -1,15 +1,17 @@
 import boto3
 import json
 import requests
-from functions import read_secret
 from requests.auth import HTTPBasicAuth
 from boto3.dynamodb.conditions import Key
 
+def lambda_handler(event, context):
+    poll_sqs()
+
 def search_recommendation(cuisine):
-  url = 'https://search-yelp-6o3kvujuuy2tkt6rcjrei6o4wq.aos.us-east-1.on.aws/restaurants/_search'
+  url = 'https://search-yelp-restaurants-stdbh4kdqgmea75qrmmfw3wv2q.aos.us-east-1.on.aws/restaurants/_search'
   headers = {"Content-Type": "application/json"}
   body = {
-    "size": 1,
+    "size": 3,
     "query": {
         "bool": {
             "must": [
@@ -23,32 +25,45 @@ def search_recommendation(cuisine):
     url,
     data=json.dumps(body),
     headers=headers,
-    auth=HTTPBasicAuth(read_secret('elasticsearch_user'), read_secret('elasticsearch_password'))
+    auth=HTTPBasicAuth('pp2833', 'Elastic@123')
   )
   if response.status_code == 200:
     recommendation = response.json()['hits']['hits']
     if len(recommendation) > 0:
-      return recommendation[0]['_source']['restaurantID']
+      restaurants = []
+      for restaurant_source in recommendation:
+        restaurants.append(restaurant_source['_source']['restaurantID'])
+      return restaurants
     else:
       print('No record found')
   else:
     print('Error while calling Elastic Search')
 
-def scan_dynamo(restaurantID):
+def scan_dynamo(restaurantIDs):
   dynamodb = boto3.resource('dynamodb')
   table = dynamodb.Table('yelp-restaurants')
-  response = table.query(KeyConditionExpression=Key('id').eq(restaurantID))
-  return response.get('Items')[0]
+  restaurants = []
+  for restaurantID in restaurantIDs:
+    response = table.query(KeyConditionExpression=Key('id').eq(restaurantID))
+    restaurants.append({
+      'address': response['Items'][0]['address'],
+      'name': response['Items'][0]['name'],
+    })
+  return restaurants
 
 def suggest_restaurant(cuisine):
-  restaurantID = search_recommendation(cuisine)
-  restaurant = scan_dynamo(restaurantID)
-  return restaurant
+  restaurantIDs = search_recommendation(cuisine)
+  restaurants = scan_dynamo(restaurantIDs)
+  return restaurants
 
-def send_email(restaurant, email):
+def send_email(restaurants, email, cuisine, num_people, date, time):
   client = boto3.client('ses')
+  messageBody = f"Hello! Here are my {cuisine} restaurant suggestions for {num_people} people, for {date} at {time}:\n"
+  for idx, restaurant in enumerate(restaurants):
+    messageBody += f"{idx + 1}. {restaurant['name']}, located at {restaurant['address']}\n"
+  
   response = client.send_email(
-    Source=read_secret('source_email'),
+    Source='pp2833@nyu.edu',
     Destination={
       'ToAddresses': [ email ]
     },
@@ -59,16 +74,17 @@ def send_email(restaurant, email):
       },
       'Body': {
         'Text': {
-          'Data': 'Your recommended restaurant is: ' + restaurant,
+          'Data': messageBody,
           'Charset': 'UTF-8'
         }
       }
     }
   )
 
-def poll_sns():
-  client = boto3.client('sqs', region_name='us-east-1')
-  queues = client.list_queues(QueueNamePrefix='Q1')
+def poll_sqs():
+  session = boto3.session.Session()
+  client = session.client('sqs', region_name='us-east-1')
+  queues = client.list_queues(QueueNamePrefix='restaurant-request')
   queueUrl = queues['QueueUrls'][0]
   response = client.receive_message(
       QueueUrl=queueUrl,
@@ -78,11 +94,20 @@ def poll_sns():
       VisibilityTimeout=30,
       WaitTimeSeconds=0
   )
-  for message in response['Messages']:
-    messages_attributes = message.get('MessageAttributes')
-    cuisine = messages_attributes.get('cuisine')
-    email = messages_attributes.get('email')
-  
-  send_email(suggest_restaurant(cuisine), email)
+  if 'Messages' in response:
+    for message in response['Messages']:
+      messages_attributes = message.get('MessageAttributes')
+      cuisine = messages_attributes.get('cuisine').get('StringValue')
+      email = messages_attributes.get('email').get('StringValue')
+      date = messages_attributes.get('date').get('StringValue')
+      time = messages_attributes.get('time').get('StringValue')
+      num_people = messages_attributes.get('num_people').get('StringValue')
 
-poll_sns()
+      delete_response = client.delete_message(
+        QueueUrl=queueUrl,
+        ReceiptHandle=message.get('ReceiptHandle')
+      )
+      
+    send_email(suggest_restaurant(str(cuisine).lower()), email, cuisine, num_people, date, time)
+  else:
+    print('No messages in queue')

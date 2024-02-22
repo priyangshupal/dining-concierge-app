@@ -6,7 +6,7 @@ import datetime
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('yelp-restaurants')
 
-with open('restaurants.json', 'r') as file:
+with open('restaurants_compressed.json', 'r') as file:
   d = json.load (file)
   
   for idx, item in enumerate(d['restaurants']):
@@ -14,6 +14,7 @@ with open('restaurants.json', 'r') as file:
 
     dynamoItem = {
       'id': item['id'],
+      'name': item['name'],
       'coordinates': {
         'latitude': Decimal(str(item["coordinates"]["latitude"])),
         'longitude': Decimal(str(item["coordinates"]["longitude"]))

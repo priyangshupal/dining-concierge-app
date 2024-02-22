@@ -12,7 +12,7 @@ res = table.scan()
 for idx, item in enumerate(res['Items']):
   print('Inserting item', idx + 1)
   
-  url = 'https://search-yelp-6o3kvujuuy2tkt6rcjrei6o4wq.aos.us-east-1.on.aws/restaurants/_doc'
+  url = 'https://search-yelp-restaurants-stdbh4kdqgmea75qrmmfw3wv2q.aos.us-east-1.on.aws/restaurants/_doc'
   headers = {"Content-Type": "application/json"}
   body = {"restaurantID": item['id'], "cuisine": item['cuisine']}
   
