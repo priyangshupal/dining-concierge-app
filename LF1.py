@@ -99,6 +99,8 @@ def dispatch(intent_request):
     
     if intent_name == 'SuggestRestaurant':
         return dining_suggestion_intent(intent_request)
+    elif intent_name == "PreviousReco":
+        return previous_reco_intent(intent_request)
     
 
     raise Exception('Intent with name ' + intent_name + ' not supported')
@@ -152,6 +154,38 @@ def validate_dining_suggestion(location, cuisine, num_people, date, time):
 
     return build_validation_result(True, None, None)
 
+def previous_reco_intent(intent_request):
+    choice = get_slots(intent_request)['PreviousReco']
+    if choice.lower() == "yes":
+        email = intent_request['userId']
+        sqs = boto3.resource('sqs')
+        queue = sqs.get_queue_by_name(QueueName='restaurant-request')
+        msg = {"email": email}
+        response = queue.send_message(
+        MessageAttributes={
+        'email': {
+                        'DataType': 'String',
+                        'StringValue': email
+        }},
+                MessageBody=json.dumps(msg),
+        )
+        return close(intent_request['sessionAttributes'],
+                 'Fulfilled',
+                 {'contentType': 'PlainText',
+                  'content': 'Thank you! You will recieve the suggestion shortly'})
+
+
+    else:
+        return {
+            'dialogAction': {
+                "type": "ElicitIntent",
+                'message': {
+                    'contentType': 'PlainText',
+                    'content': 'Alright, What can I help you with today?'}
+            }
+        }
+
+        
 
 def dining_suggestion_intent(intent_request):
     location = get_slots(intent_request)["Location"]
@@ -160,7 +194,6 @@ def dining_suggestion_intent(intent_request):
     date = get_slots(intent_request)["Date"]
     time = get_slots(intent_request)["Time"]
     email = get_slots(intent_request)["Email"]
-    getPrev = get_slots(intent_request)["GetPrev"]
     source = intent_request['invocationSource']
     print(source)
     if source == 'DialogCodeHook':
@@ -189,7 +222,7 @@ def dining_suggestion_intent(intent_request):
         if cuisine is not None and email is not None and location is not None:
             sqs = boto3.resource('sqs')
             queue = sqs.get_queue_by_name(QueueName='restaurant-request')
-            msg = {"cuisine": cuisine, "email": email, "location": location, "time": time, "num_people": num_people, "date": date, "getPrev":getPrev}
+            msg = {"cuisine": cuisine, "email": email, "location": location, "time": time, "num_people": num_people, "date": date}
             response = queue.send_message(
                 MessageAttributes={
                     'cuisine': {
@@ -215,10 +248,6 @@ def dining_suggestion_intent(intent_request):
                     'date': {
                         'DataType': 'String',
                         'StringValue': date
-                    },
-                    'getPrev': {
-                        'DataType': 'String',
-                        'StringValue': getPrev
                     }
                 },
                 MessageBody=json.dumps(msg),
