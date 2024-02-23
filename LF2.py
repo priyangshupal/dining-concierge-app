@@ -1,6 +1,7 @@
 import boto3
 import json
 import requests
+from functions import read_secret
 from requests.auth import HTTPBasicAuth
 from boto3.dynamodb.conditions import Key
 
@@ -25,7 +26,7 @@ def search_recommendation(cuisine):
     url,
     data=json.dumps(body),
     headers=headers,
-    auth=HTTPBasicAuth('pp2833', 'Elastic@123')
+    auth=HTTPBasicAuth(read_secret('elasticsearch_user'), read_secret('elasticsearch_password'))
   )
   if response.status_code == 200:
     recommendation = response.json()['hits']['hits']
@@ -60,7 +61,7 @@ def send_email_prev(previous_recommendation, email):
   if previous_recommendation != '' and email != '':
     client = boto3.client('ses')
     response = client.send_email(
-      Source='pp2833@nyu.edu',
+      Source=read_secret('source_email'),
       Destination={
         'ToAddresses': [ email ]
       },
@@ -87,7 +88,7 @@ def send_email(restaurants, email, cuisine, num_people, date, time):
   add_past_recommendation(email, messageBody)
   
   response = client.send_email(
-    Source='pp2833@nyu.edu',
+    Source=read_secret('source_email'),
     Destination={
       'ToAddresses': [ email ]
     },
